@@ -31,9 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTeamMember((data as unknown as TeamMember) ?? null);
   }, []);
 
+  // Reads the session fresh from the SDK rather than the `session` state
+  // above -- this is called right after sign-up/sign-in, and the
+  // onAuthStateChange listener that updates `session` state fires
+  // asynchronously, so the state closure here can still be stale/null at
+  // that moment even though the SDK already has the new session.
   const refreshTeamMember = useCallback(async () => {
-    await loadTeamMember(session?.user.id);
-  }, [session, loadTeamMember]);
+    const { data } = await supabase.auth.getSession();
+    await loadTeamMember(data.session?.user.id);
+  }, [loadTeamMember]);
 
   useEffect(() => {
     let active = true;

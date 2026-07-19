@@ -6,10 +6,12 @@ import { TextField } from '../../components/TextField';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export default function CreateTeam() {
   const { colors } = useTheme();
+  const { refreshTeamMember } = useAuth();
   const [teamName, setTeamName] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -46,11 +48,13 @@ export default function CreateTeam() {
       p_name: teamName.trim(),
       p_full_name: fullName.trim() || null,
     });
-    setLoading(false);
     if (rpcError) {
+      setLoading(false);
       setError(rpcError.message);
       return;
     }
+    await refreshTeamMember();
+    setLoading(false);
     router.replace('/');
   };
 
