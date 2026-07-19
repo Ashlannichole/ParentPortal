@@ -111,3 +111,22 @@ export interface Contact {
   role: TeamRole;
   name: string;
 }
+
+export type RequestStatus = 'pending' | 'approved' | 'declined';
+
+export interface LessonRequest {
+  id: string;
+  team_id: string;
+  athlete_id: string;
+  requested_by: string;
+  type: EventType;
+  requested_start: string;
+  requested_end: string | null;
+  note: string | null;
+  status: RequestStatus;
+  resolved_event_id: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  athletes?: Athlete;
+}

@@ -1,6 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Redirect, Tabs } from 'expo-router';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Redirect, Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -28,6 +28,11 @@ export default function AppLayout() {
         tabBarStyle: { backgroundColor: colors.tabBar, borderTopColor: colors.border },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.tabIconInactive,
+        headerRight: () => (
+          <Pressable onPress={() => router.push('/settings')} hitSlop={12} style={{ marginRight: 16 }}>
+            <Ionicons name="settings-outline" size={22} color={colors.text} />
+          </Pressable>
+        ),
       }}
     >
       <Tabs.Screen
@@ -52,33 +57,14 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="swag"
+        name="team-info"
         options={{
-          title: 'SWAG',
-          tabBarIcon: ({ color, size }) => <Ionicons name="shirt" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="contacts"
-        options={{
-          title: 'Contacts',
+          title: 'Team Info',
           tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,
         }}
       />
-      <Tabs.Screen
-        name="coaches"
-        options={{
-          title: 'Coaches',
-          tabBarIcon: ({ color, size }) => <Ionicons name="ribbon" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Ionicons name="settings" color={color} size={size} />,
-        }}
-      />
+      <Tabs.Screen name="swag" options={{ href: null, title: 'SWAG' }} />
+      <Tabs.Screen name="settings" options={{ href: null, title: 'Settings' }} />
     </Tabs>
   );
 }

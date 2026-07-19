@@ -4,7 +4,10 @@
 //   supabase functions deploy send-push
 //
 // Invoke it (e.g. from a Database Webhook on `events` INSERT, or manually)
-// with a POST body of: { "team_id": "...", "title": "...", "body": "..." }
+// with a POST body of: { "team_id": "...", "title": "...", "body": "...", "role": "coach" }
+// `role` is optional -- omit it to notify every team member, or pass
+// "coach" / "parent" to target only that role (e.g. a new lesson request
+// should only alert coaches).
 //
 // This is a stub wired for the "new event" / "payment reminder" use cases
 // described in the app plan -- hooking it up to fire automatically on
@@ -20,7 +23,7 @@ Deno.serve(async (req: Request) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const { team_id, title, body } = await req.json();
+  const { team_id, title, body, role, user_id } = await req.json();
   if (!team_id || !title || !body) {
     return new Response(JSON.stringify({ error: 'team_id, title, and body are required' }), {
       status: 400,
@@ -30,16 +33,22 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: members, error: membersError } = await supabase
-    .from('team_members')
-    .select('user_id')
-    .eq('team_id', team_id);
+  let userIds: string[];
+  if (user_id) {
+    // Single-recipient notification (e.g. telling a parent their request
+    // was approved/declined) -- skip the team_members lookup entirely.
+    userIds = [user_id];
+  } else {
+    let membersQuery = supabase.from('team_members').select('user_id').eq('team_id', team_id);
+    if (role) membersQuery = membersQuery.eq('role', role);
 
-  if (membersError) {
-    return new Response(JSON.stringify({ error: membersError.message }), { status: 500 });
+    const { data: members, error: membersError } = await membersQuery;
+    if (membersError) {
+      return new Response(JSON.stringify({ error: membersError.message }), { status: 500 });
+    }
+    userIds = (members ?? []).map((m: { user_id: string }) => m.user_id);
   }
 
-  const userIds = (members ?? []).map((m: { user_id: string }) => m.user_id);
   if (userIds.length === 0) {
     return new Response(JSON.stringify({ sent: 0 }), { headers: { 'Content-Type': 'application/json' } });
   }

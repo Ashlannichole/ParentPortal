@@ -11,6 +11,7 @@ create type team_role as enum ('coach', 'parent');
 create type payment_status as enum ('paid', 'unpaid');
 create type event_type as enum ('practice', 'tournament', 'open_gym', 'scrimmage', 'private_lesson');
 create type vote_type as enum ('up', 'down');
+create type request_status as enum ('pending', 'approved', 'declined');
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -107,6 +108,25 @@ create table push_tokens (
   user_id uuid not null references auth.users(id) on delete cascade,
   expo_push_token text not null unique,
   updated_at timestamptz not null default now()
+);
+
+-- Parent-submitted requests for a private lesson / open gym at a specific
+-- time; stays 'pending' until a coach approves (creating a real `events`
+-- row + `event_signups`) or declines.
+create table lesson_requests (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  athlete_id uuid not null references athletes(id) on delete cascade,
+  requested_by uuid not null references auth.users(id),
+  type event_type not null,
+  requested_start timestamptz not null,
+  requested_end timestamptz,
+  note text,
+  status request_status not null default 'pending',
+  resolved_event_id uuid references events(id) on delete set null,
+  resolved_by uuid references auth.users(id),
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
@@ -245,6 +265,7 @@ alter table event_signups enable row level security;
 alter table swag_items enable row level security;
 alter table swag_votes enable row level security;
 alter table push_tokens enable row level security;
+alter table lesson_requests enable row level security;
 
 -- teams: members can see their own team's row (name/codes). No direct
 -- insert/update policy -- team creation/joining goes through the RPCs above.
@@ -405,6 +426,33 @@ create policy "push_tokens: own update" on push_tokens
 
 create policy "push_tokens: own delete" on push_tokens
   for delete using (user_id = auth.uid());
+
+-- lesson_requests: coaches see/resolve every request for their team; a
+-- parent sees/manages only their own, and can only retract while pending.
+create policy "lesson_requests: coach can view" on lesson_requests
+  for select using (is_team_coach(team_id));
+
+create policy "lesson_requests: coach can update" on lesson_requests
+  for update using (is_team_coach(team_id));
+
+create policy "lesson_requests: requester can view own" on lesson_requests
+  for select using (requested_by = auth.uid());
+
+create policy "lesson_requests: requester can insert own" on lesson_requests
+  for insert with check (
+    requested_by = auth.uid()
+    and is_team_member(team_id)
+    and exists (
+      select 1 from athletes a
+      where a.id = lesson_requests.athlete_id and a.parent_user_id = auth.uid()
+    )
+  );
+
+create policy "lesson_requests: requester can cancel pending" on lesson_requests
+  for delete using (requested_by = auth.uid() and status = 'pending');
+
+create policy "lesson_requests: coach can delete" on lesson_requests
+  for delete using (is_team_coach(team_id));
 
 -- ---------------------------------------------------------------------------
 -- Realtime (for live SWAG vote counts)
