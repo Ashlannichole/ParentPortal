@@ -55,6 +55,19 @@ create table payments (
   created_at timestamptz not null default now()
 );
 
+-- History ledger for partial payments against a due item -- lets coaches
+-- track club-dues payment plans over a season instead of a single
+-- paid/unpaid toggle.
+create table payment_installments (
+  id uuid primary key default gen_random_uuid(),
+  payment_id uuid not null references payments(id) on delete cascade,
+  amount_cents integer not null,
+  paid_at date not null default current_date,
+  recorded_by uuid not null references auth.users(id),
+  note text,
+  created_at timestamptz not null default now()
+);
+
 create table coaches (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references teams(id) on delete cascade,
@@ -266,6 +279,7 @@ alter table swag_items enable row level security;
 alter table swag_votes enable row level security;
 alter table push_tokens enable row level security;
 alter table lesson_requests enable row level security;
+alter table payment_installments enable row level security;
 
 -- teams: members can see their own team's row (name/codes). No direct
 -- insert/update policy -- team creation/joining goes through the RPCs above.
@@ -312,6 +326,41 @@ create policy "payments: coach update" on payments
 
 create policy "payments: coach delete" on payments
   for delete using (is_team_coach(team_id));
+
+-- payment_installments: coach records/views/removes entries for their team;
+-- a parent can view (read-only) their own athlete's payment history.
+create policy "payment_installments: coach can view" on payment_installments
+  for select using (
+    exists (
+      select 1 from payments p
+      where p.id = payment_installments.payment_id and is_team_coach(p.team_id)
+    )
+  );
+
+create policy "payment_installments: parent can view own athlete" on payment_installments
+  for select using (
+    exists (
+      select 1 from payments p
+      join athletes a on a.id = p.athlete_id
+      where p.id = payment_installments.payment_id and a.parent_user_id = auth.uid()
+    )
+  );
+
+create policy "payment_installments: coach can insert" on payment_installments
+  for insert with check (
+    exists (
+      select 1 from payments p
+      where p.id = payment_installments.payment_id and is_team_coach(p.team_id)
+    )
+  );
+
+create policy "payment_installments: coach can delete" on payment_installments
+  for delete using (
+    exists (
+      select 1 from payments p
+      where p.id = payment_installments.payment_id and is_team_coach(p.team_id)
+    )
+  );
 
 -- coaches: viewable by any team member (About the Coaches page), editable
 -- only by coaches.
@@ -459,3 +508,14 @@ create policy "lesson_requests: coach can delete" on lesson_requests
 -- ---------------------------------------------------------------------------
 alter publication supabase_realtime add table swag_votes;
 alter publication supabase_realtime add table swag_items;
+
+-- ---------------------------------------------------------------------------
+-- Backfill (no-op on a fresh install with no existing payments)
+-- ---------------------------------------------------------------------------
+-- Existing payments already marked 'paid' get one installment for the full
+-- amount, dated when the payment record was created, so they keep showing
+-- 100% once the ring switches to ledger-based math.
+insert into payment_installments (payment_id, amount_cents, paid_at, recorded_by, created_at)
+select id, amount_cents, created_at::date, created_by, created_at
+from payments
+where status = 'paid';

@@ -5,9 +5,11 @@
 //
 // Invoke it (e.g. from a Database Webhook on `events` INSERT, or manually)
 // with a POST body of: { "team_id": "...", "title": "...", "body": "...", "role": "coach" }
-// `role` is optional -- omit it to notify every team member, or pass
-// "coach" / "parent" to target only that role (e.g. a new lesson request
-// should only alert coaches).
+// `role`, `user_id`, and `user_ids` are all optional and mutually exclusive:
+// omit all three to notify every team member, pass "coach" / "parent" to
+// target only that role, pass `user_id` for a single recipient, or
+// `user_ids` for an exact list (e.g. "everyone else signed up for this
+// event").
 //
 // This is a stub wired for the "new event" / "payment reminder" use cases
 // described in the app plan -- hooking it up to fire automatically on
@@ -23,7 +25,7 @@ Deno.serve(async (req: Request) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const { team_id, title, body, role, user_id } = await req.json();
+  const { team_id, title, body, role, user_id, user_ids } = await req.json();
   if (!team_id || !title || !body) {
     return new Response(JSON.stringify({ error: 'team_id, title, and body are required' }), {
       status: 400,
@@ -34,7 +36,10 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   let userIds: string[];
-  if (user_id) {
+  if (user_ids) {
+    // Exact recipient list (e.g. everyone else signed up for an event).
+    userIds = user_ids;
+  } else if (user_id) {
     // Single-recipient notification (e.g. telling a parent their request
     // was approved/declined) -- skip the team_members lookup entirely.
     userIds = [user_id];

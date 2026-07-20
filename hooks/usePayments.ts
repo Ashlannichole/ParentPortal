@@ -14,7 +14,7 @@ export function usePayments() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payments')
-        .select('*, athletes(*)')
+        .select('*, athletes(*), payment_installments(*)')
         .eq('team_id', teamId as string)
         .order('due_date', { ascending: true });
       if (error) throw error;
@@ -41,13 +41,16 @@ export function usePayments() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments', teamId] }),
   });
 
-  const setStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: PaymentStatus }) => {
-      const { error } = await supabase.from('payments').update({ status }).eq('id', id);
+  const addInstallment = useMutation({
+    mutationFn: async (input: { payment_id: string; amount_cents: number; paid_at?: string; note?: string | null }) => {
+      const { error } = await supabase.from('payment_installments').insert({
+        recorded_by: session!.user.id,
+        ...input,
+      });
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments', teamId] }),
   });
 
-  return { ...query, isCoach, addPayment, setStatus };
+  return { ...query, isCoach, addPayment, addInstallment };
 }

@@ -40,6 +40,17 @@ export interface Payment {
   created_by: string;
   created_at: string;
   athletes?: Athlete;
+  payment_installments?: PaymentInstallment[];
+}
+
+export interface PaymentInstallment {
+  id: string;
+  payment_id: string;
+  amount_cents: number;
+  paid_at: string;
+  recorded_by: string;
+  note: string | null;
+  created_at: string;
 }
 
 export interface CoachProfile {

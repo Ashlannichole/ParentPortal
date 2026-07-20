@@ -1,14 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
+import { useFocusEffect } from 'expo-router';
 import { Screen } from '../../components/Screen';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
 import { ErrorText } from '../../components/ErrorText';
+import { DateField } from '../../components/DateField';
+import { TimeField } from '../../components/TimeField';
 import { useEvents, useEventSignups } from '../../hooks/useEvents';
 import { useAthletes } from '../../hooks/useAthletes';
 import { useLessonRequests } from '../../hooks/useLessonRequests';
+import { useCalendarBadge } from '../../hooks/useCalendarBadge';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../theme/ThemeProvider';
 import { EVENT_TYPE_LABELS, EventType, LessonRequest, TeamEvent } from '../../lib/types';
@@ -16,26 +20,41 @@ import { formatEventWhen } from '../../lib/format';
 
 const EVENT_TYPES: EventType[] = ['practice', 'tournament', 'open_gym', 'scrimmage', 'private_lesson'];
 const REQUESTABLE_TYPES: EventType[] = ['private_lesson', 'open_gym'];
+const SIGNUP_TYPES: EventType[] = ['private_lesson', 'open_gym'];
 
 function toDateKey(input: string | Date) {
   const d = typeof input === 'string' ? new Date(input) : input;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function toTimeStr(d: Date) {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+function combineDateAndTime(date: Date | null, time: Date | null): Date | null {
+  if (!date || !time) return null;
+  const combined = new Date(date);
+  combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
+  return combined;
 }
 
 function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boolean; onDelete: () => void }) {
   const { colors } = useTheme();
   const { data: athletes } = useAthletes();
-  const { data: signups, signUp, cancelSignup } = useEventSignups(event.id);
+  const { data: signups, signUp, cancelSignup } = useEventSignups(event);
   const [expanded, setExpanded] = useState(false);
 
-  const isPrivateLesson = event.type === 'private_lesson';
+  const hasSignups = SIGNUP_TYPES.includes(event.type);
   const myAthletes = athletes ?? [];
   const signedUpAthleteIds = new Set((signups ?? []).map((s) => s.athlete_id));
   const isFull = event.capacity != null && (signups?.length ?? 0) >= event.capacity;
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Cancel this event?',
+      `This will remove "${event.title}" and notify anyone signed up.`,
+      [
+        { text: 'Keep It', style: 'cancel' },
+        { text: 'Cancel Event', style: 'destructive', onPress: onDelete },
+      ]
+    );
+  };
 
   return (
     <Card>
@@ -43,8 +62,8 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
         <View style={styles.rowTop}>
           <Text style={[styles.badge, { color: colors.accent }]}>{EVENT_TYPE_LABELS[event.type]}</Text>
           {isCoach ? (
-            <Pressable onPress={onDelete}>
-              <Text style={{ color: colors.danger, fontSize: 13 }}>Delete</Text>
+            <Pressable onPress={confirmDelete}>
+              <Text style={{ color: colors.danger, fontSize: 13 }}>Cancel Event</Text>
             </Pressable>
           ) : null}
         </View>
@@ -53,7 +72,7 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
         {event.location ? <Text style={{ color: colors.textMuted }}>{event.location}</Text> : null}
       </Pressable>
 
-      {isPrivateLesson ? (
+      {hasSignups ? (
         <View style={styles.signupSection}>
           <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: 6 }}>
             {signups?.length ?? 0}
@@ -73,7 +92,9 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
                   <View key={athlete.id} style={styles.athleteRow}>
                     <Text style={{ color: colors.text }}>{athlete.name}</Text>
                     <Pressable
-                      onPress={() => (signedUp ? cancelSignup.mutate(athlete.id) : signUp.mutate(athlete.id))}
+                      onPress={() =>
+                        signedUp ? cancelSignup.mutate(athlete) : signUp.mutate(athlete)
+                      }
                       disabled={!signedUp && isFull}
                     >
                       <Text
@@ -131,6 +152,13 @@ export default function CalendarScreen() {
   const { data: events, addEvent, deleteEvent } = useEvents();
   const { data: athletes } = useAthletes();
   const { pending, submitRequest, approveRequest, declineRequest } = useLessonRequests();
+  const { markSeen } = useCalendarBadge();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      markSeen();
+    }, [markSeen])
+  );
 
   const [view, setView] = useState<'calendar' | 'requests'>('calendar');
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
@@ -141,9 +169,9 @@ export default function CalendarScreen() {
   const [type, setType] = useState<EventType>('practice');
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
-  const [date, setDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [eventDate, setEventDate] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [capacity, setCapacity] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -151,8 +179,8 @@ export default function CalendarScreen() {
   const [requestModalVisible, setRequestModalVisible] = useState(false);
   const [reqAthleteId, setReqAthleteId] = useState<string | null>(null);
   const [reqType, setReqType] = useState<EventType>('private_lesson');
-  const [reqDate, setReqDate] = useState('');
-  const [reqTime, setReqTime] = useState('');
+  const [reqDate, setReqDate] = useState<Date | null>(null);
+  const [reqTime, setReqTime] = useState<Date | null>(null);
   const [reqNote, setReqNote] = useState('');
   const [reqError, setReqError] = useState<string | null>(null);
 
@@ -174,9 +202,9 @@ export default function CalendarScreen() {
     setType('practice');
     setTitle('');
     setLocation('');
-    setDate('');
-    setStartTime('');
-    setEndTime('');
+    setEventDate(null);
+    setStartTime(null);
+    setEndTime(null);
     setCapacity('');
     setError(null);
     setApprovingRequest(null);
@@ -184,7 +212,7 @@ export default function CalendarScreen() {
 
   const openAddModal = () => {
     resetEventForm();
-    setDate(selectedDate);
+    setEventDate(new Date(`${selectedDate}T00:00:00`));
     setModalVisible(true);
   };
 
@@ -193,27 +221,27 @@ export default function CalendarScreen() {
     setApprovingRequest(request);
     setType(request.type);
     setTitle(EVENT_TYPE_LABELS[request.type]);
-    setDate(toDateKey(request.requested_start));
-    setStartTime(toTimeStr(new Date(request.requested_start)));
-    setEndTime(request.requested_end ? toTimeStr(new Date(request.requested_end)) : '');
+    setEventDate(new Date(request.requested_start));
+    setStartTime(new Date(request.requested_start));
+    setEndTime(request.requested_end ? new Date(request.requested_end) : null);
     setCapacity(request.type === 'private_lesson' ? '1' : '');
     setModalVisible(true);
   };
 
   const onSubmitEventModal = async () => {
     setError(null);
-    const start = new Date(`${date}T${startTime}`);
-    if (isNaN(start.getTime())) {
-      setError('Enter a valid date (YYYY-MM-DD) and start time (HH:MM).');
+    const start = combineDateAndTime(eventDate, startTime);
+    if (!start) {
+      setError('Pick a date and start time.');
       return;
     }
-    const end = endTime ? new Date(`${date}T${endTime}`) : null;
+    const end = combineDateAndTime(eventDate, endTime);
     const eventInput = {
       type,
       title: title.trim(),
       location: location.trim() || null,
       start_time: start.toISOString(),
-      end_time: end && !isNaN(end.getTime()) ? end.toISOString() : null,
+      end_time: end ? end.toISOString() : null,
       capacity: capacity ? parseInt(capacity, 10) : null,
     };
 
@@ -233,17 +261,17 @@ export default function CalendarScreen() {
   const resetRequestForm = () => {
     setReqAthleteId(null);
     setReqType('private_lesson');
-    setReqDate('');
-    setReqTime('');
+    setReqDate(null);
+    setReqTime(null);
     setReqNote('');
     setReqError(null);
   };
 
   const onSubmitRequest = async () => {
     setReqError(null);
-    const start = new Date(`${reqDate}T${reqTime}`);
-    if (!reqAthleteId || isNaN(start.getTime())) {
-      setReqError('Pick your athlete and enter a valid date and time.');
+    const start = combineDateAndTime(reqDate, reqTime);
+    if (!reqAthleteId || !start) {
+      setReqError('Pick your athlete, a date, and a time.');
       return;
     }
     try {
@@ -334,7 +362,7 @@ export default function CalendarScreen() {
               </Text>
             ) : (
               dayEvents.map((event) => (
-                <EventRow key={event.id} event={event} isCoach={isCoach} onDelete={() => deleteEvent.mutate(event.id)} />
+                <EventRow key={event.id} event={event} isCoach={isCoach} onDelete={() => deleteEvent.mutate(event)} />
               ))
             )}
           </View>
@@ -369,9 +397,9 @@ export default function CalendarScreen() {
           </View>
           <TextField label="Title" value={title} onChangeText={setTitle} placeholder="e.g. Tuesday Practice" />
           <TextField label="Location" value={location} onChangeText={setLocation} placeholder="Gym, court #, address" />
-          <TextField label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} placeholder="2026-08-01" />
-          <TextField label="Start Time (HH:MM, 24hr)" value={startTime} onChangeText={setStartTime} placeholder="18:00" />
-          <TextField label="End Time (optional)" value={endTime} onChangeText={setEndTime} placeholder="19:30" />
+          <DateField label="Date" value={eventDate} onChange={setEventDate} />
+          <TimeField label="Start Time" value={startTime} onChange={setStartTime} />
+          <TimeField label="End Time (optional)" value={endTime} onChange={setEndTime} />
           {type === 'private_lesson' ? (
             <TextField
               label="Capacity (optional)"
@@ -385,7 +413,7 @@ export default function CalendarScreen() {
             title="Save"
             onPress={onSubmitEventModal}
             loading={addEvent.isPending || approveRequest.isPending}
-            disabled={!title || !date || !startTime}
+            disabled={!title || !eventDate || !startTime}
           />
           <View style={{ height: 10 }} />
           <Button
@@ -433,8 +461,8 @@ export default function CalendarScreen() {
               </Pressable>
             ))}
           </View>
-          <TextField label="Preferred Date (YYYY-MM-DD)" value={reqDate} onChangeText={setReqDate} placeholder="2026-08-01" />
-          <TextField label="Preferred Time (HH:MM, 24hr)" value={reqTime} onChangeText={setReqTime} placeholder="18:00" />
+          <DateField label="Preferred Date" value={reqDate} onChange={setReqDate} />
+          <TimeField label="Preferred Time" value={reqTime} onChange={setReqTime} />
           <TextField label="Note (optional)" value={reqNote} onChangeText={setReqNote} multiline numberOfLines={3} />
           <Button
             title="Send Request"

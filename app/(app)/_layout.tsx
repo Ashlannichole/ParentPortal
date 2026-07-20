@@ -3,11 +3,13 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Redirect, Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
+import { useCalendarBadge } from '../../hooks/useCalendarBadge';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export default function AppLayout() {
   const { session, teamMember, loading } = useAuth();
   const { colors } = useTheme();
+  const { badgeCount } = useCalendarBadge();
 
   if (loading) {
     return (
@@ -47,6 +49,7 @@ export default function AppLayout() {
         options={{
           title: 'Calendar',
           tabBarIcon: ({ color, size }) => <Ionicons name="calendar" color={color} size={size} />,
+          tabBarBadge: badgeCount > 0 ? badgeCount : undefined,
         }}
       />
       <Tabs.Screen

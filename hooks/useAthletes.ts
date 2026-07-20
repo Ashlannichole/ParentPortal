@@ -34,5 +34,13 @@ export function useAthletes() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['athletes', teamId] }),
   });
 
-  return { ...query, addAthlete };
+  const updateAthlete = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from('athletes').update({ name }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['athletes', teamId] }),
+  });
+
+  return { ...query, addAthlete, updateAthlete };
 }

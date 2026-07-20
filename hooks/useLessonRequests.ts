@@ -1,18 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
+import { notifyRole, notifyTeam, notifyUsers } from '../lib/notifications';
 import type { EventType, LessonRequest } from '../lib/types';
 
-// Best-effort push notification -- the Edge Function may not be deployed
-// yet, or delivery can fail for other reasons, and none of that should ever
-// block the underlying request/approve/decline action from succeeding.
-async function notifyPush(body: Record<string, unknown>) {
-  try {
-    await supabase.functions.invoke('send-push', { body });
-  } catch {
-    // ignore -- see comment above
-  }
-}
+const ANNOUNCEABLE_TYPES: EventType[] = ['private_lesson', 'open_gym'];
 
 export function useLessonRequests() {
   const { teamMember, session } = useAuth();
@@ -51,9 +43,7 @@ export function useLessonRequests() {
       });
       if (error) throw error;
 
-      await notifyPush({
-        team_id: teamId,
-        role: 'coach',
+      await notifyRole(teamId as string, 'coach', {
         title: 'New request',
         body: `A parent requested a ${input.type.replace('_', ' ')}.`,
       });
@@ -97,12 +87,20 @@ export function useLessonRequests() {
         .eq('id', request.id);
       if (updateError) throw updateError;
 
-      await notifyPush({
-        team_id: teamId,
-        user_id: request.requested_by,
-        title: 'Request approved',
-        body: `Your ${request.type.replace('_', ' ')} request was approved.`,
-      });
+      // Broadcast to the whole team for private lessons/open gyms -- the
+      // requester is a team member so they're included automatically, and
+      // everyone else now knows there's a new slot to sign up for.
+      if (ANNOUNCEABLE_TYPES.includes(request.type)) {
+        await notifyTeam(teamId as string, {
+          title: 'New sign-up available',
+          body: `A ${request.type.replace('_', ' ')} was just scheduled -- sign up now!`,
+        });
+      } else {
+        await notifyUsers(teamId as string, [request.requested_by], {
+          title: 'Request approved',
+          body: `Your ${request.type.replace('_', ' ')} request was approved.`,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lesson_requests', teamId] });
@@ -122,9 +120,7 @@ export function useLessonRequests() {
         .eq('id', request.id);
       if (error) throw error;
 
-      await notifyPush({
-        team_id: teamId,
-        user_id: request.requested_by,
+      await notifyUsers(teamId as string, [request.requested_by], {
         title: 'Request declined',
         body: `Your ${request.type.replace('_', ' ')} request was declined.`,
       });
