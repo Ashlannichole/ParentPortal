@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
+
+const projectId = Constants.expoConfig?.extra?.eas?.projectId;
 
 export function usePushNotifications() {
   const { session } = useAuth();
@@ -31,8 +34,14 @@ export function usePushNotifications() {
       return;
     }
 
+    if (!projectId) {
+      setStatus('error');
+      setError('Missing EAS project ID -- push tokens cannot be generated.');
+      return;
+    }
+
     try {
-      const tokenResponse = await Notifications.getExpoPushTokenAsync();
+      const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
       const expoPushToken = tokenResponse.data;
 
       if (session) {
