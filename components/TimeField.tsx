@@ -17,6 +17,11 @@ function toInputValue(d: Date) {
 export function TimeField({ label, value, onChange, placeholder = 'Select a time' }: TimeFieldProps) {
   const { colors } = useTheme();
   const [showPicker, setShowPicker] = useState(false);
+  // Local draft, synced from `value` only when the picker opens -- kept
+  // separate from the parent's committed value so unrelated re-renders
+  // (e.g. typing in a sibling field) can't hand the native spinner a fresh
+  // `new Date()` mid-scroll and snap it back to the current time.
+  const [draftValue, setDraftValue] = useState<Date>(() => value ?? new Date());
 
   const displayValue = value
     ? value.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -52,11 +57,16 @@ export function TimeField({ label, value, onChange, placeholder = 'Select a time
     );
   }
 
+  const openPicker = () => {
+    setDraftValue(value ?? new Date());
+    setShowPicker(true);
+  };
+
   return (
     <View style={styles.wrapper}>
       {label ? <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text> : null}
       <Pressable
-        onPress={() => setShowPicker(true)}
+        onPress={openPicker}
         style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card }]}
       >
         <Text style={{ color: value ? colors.text : colors.textMuted, fontSize: 16 }}>{displayValue}</Text>
@@ -64,16 +74,29 @@ export function TimeField({ label, value, onChange, placeholder = 'Select a time
       {showPicker ? (
         <>
           <DateTimePicker
-            value={value ?? new Date()}
+            value={draftValue}
             mode="time"
             display="spinner"
             onChange={(event, selectedDate) => {
-              if (Platform.OS === 'android') setShowPicker(false);
-              if (event.type !== 'dismissed' && selectedDate) onChange(selectedDate);
+              if (!selectedDate) return;
+              if (Platform.OS === 'android') {
+                setShowPicker(false);
+                if (event.type !== 'dismissed') onChange(selectedDate);
+                return;
+              }
+              // iOS spinner fires continuously while scrolling -- just
+              // track it locally, don't propagate to the parent yet.
+              setDraftValue(selectedDate);
             }}
           />
           {Platform.OS === 'ios' ? (
-            <Pressable onPress={() => setShowPicker(false)} style={styles.doneButton}>
+            <Pressable
+              onPress={() => {
+                onChange(draftValue);
+                setShowPicker(false);
+              }}
+              style={styles.doneButton}
+            >
               <Text style={{ color: colors.primary, fontWeight: '600' }}>Done</Text>
             </Pressable>
           ) : null}

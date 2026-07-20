@@ -17,6 +17,11 @@ function toInputValue(d: Date) {
 export function DateField({ label, value, onChange, placeholder = 'Select a date' }: DateFieldProps) {
   const { colors } = useTheme();
   const [showPicker, setShowPicker] = useState(false);
+  // Local draft, synced from `value` only when the picker opens -- kept
+  // separate from the parent's committed value so unrelated re-renders
+  // can't hand the native picker a fresh `new Date()` and reset it (see
+  // the same fix in TimeField.tsx for the full explanation).
+  const [draftValue, setDraftValue] = useState<Date>(() => value ?? new Date());
 
   const displayValue = value
     ? value.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
@@ -51,11 +56,16 @@ export function DateField({ label, value, onChange, placeholder = 'Select a date
     );
   }
 
+  const openPicker = () => {
+    setDraftValue(value ?? new Date());
+    setShowPicker(true);
+  };
+
   return (
     <View style={styles.wrapper}>
       {label ? <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text> : null}
       <Pressable
-        onPress={() => setShowPicker(true)}
+        onPress={openPicker}
         style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card }]}
       >
         <Text style={{ color: value ? colors.text : colors.textMuted, fontSize: 16 }}>{displayValue}</Text>
@@ -63,16 +73,27 @@ export function DateField({ label, value, onChange, placeholder = 'Select a date
       {showPicker ? (
         <>
           <DateTimePicker
-            value={value ?? new Date()}
+            value={draftValue}
             mode="date"
             display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
             onChange={(event, selectedDate) => {
-              if (Platform.OS === 'android') setShowPicker(false);
-              if (event.type !== 'dismissed' && selectedDate) onChange(selectedDate);
+              if (!selectedDate) return;
+              if (Platform.OS === 'android') {
+                setShowPicker(false);
+                if (event.type !== 'dismissed') onChange(selectedDate);
+                return;
+              }
+              setDraftValue(selectedDate);
             }}
           />
           {Platform.OS === 'ios' ? (
-            <Pressable onPress={() => setShowPicker(false)} style={styles.doneButton}>
+            <Pressable
+              onPress={() => {
+                onChange(draftValue);
+                setShowPicker(false);
+              }}
+              style={styles.doneButton}
+            >
               <Text style={{ color: colors.primary, fontWeight: '600' }}>Done</Text>
             </Pressable>
           ) : null}
