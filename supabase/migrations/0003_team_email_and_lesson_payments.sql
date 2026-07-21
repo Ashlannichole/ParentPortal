@@ -97,7 +97,7 @@ grant execute on function update_my_contact_info(uuid, text, text, text) to auth
 -- roster) couldn't be hidden from them without hiding the whole row. A
 -- separate table with no parent-facing policy at all enforces "coach only"
 -- at the database level, not just in the UI.
-create table private_lesson_payments (
+create table if not exists private_lesson_payments (
   id uuid primary key default gen_random_uuid(),
   event_signup_id uuid not null references event_signups(id) on delete cascade unique,
   paid boolean not null default false,
@@ -107,6 +107,7 @@ create table private_lesson_payments (
 
 alter table private_lesson_payments enable row level security;
 
+drop policy if exists "private_lesson_payments: coach can view" on private_lesson_payments;
 create policy "private_lesson_payments: coach can view" on private_lesson_payments
   for select using (
     exists (
@@ -116,6 +117,7 @@ create policy "private_lesson_payments: coach can view" on private_lesson_paymen
     )
   );
 
+drop policy if exists "private_lesson_payments: coach can insert" on private_lesson_payments;
 create policy "private_lesson_payments: coach can insert" on private_lesson_payments
   for insert with check (
     exists (
@@ -125,6 +127,7 @@ create policy "private_lesson_payments: coach can insert" on private_lesson_paym
     )
   );
 
+drop policy if exists "private_lesson_payments: coach can update" on private_lesson_payments;
 create policy "private_lesson_payments: coach can update" on private_lesson_payments
   for update using (
     exists (
