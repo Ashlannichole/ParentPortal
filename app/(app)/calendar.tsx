@@ -34,16 +34,23 @@ function combineDateAndTime(date: Date | null, time: Date | null): Date | null {
   return combined;
 }
 
+const ROSTER_PREVIEW_COUNT = 4;
+
 function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boolean; onDelete: () => void }) {
   const { colors } = useTheme();
   const { data: athletes } = useAthletes();
   const { data: signups, signUp, cancelSignup, setPaid } = useEventSignups(event);
-  const [expanded, setExpanded] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const hasSignups = SIGNUP_TYPES.includes(event.type);
   const myAthletes = athletes ?? [];
-  const signedUpAthleteIds = new Set((signups ?? []).map((s) => s.athlete_id));
-  const isFull = event.capacity != null && (signups?.length ?? 0) >= event.capacity;
+  const allSignups = signups ?? [];
+  const signedUpAthleteIds = new Set(allSignups.map((s) => s.athlete_id));
+  const isFull = event.capacity != null && allSignups.length >= event.capacity;
+
+  const isPrivateLesson = event.type === 'private_lesson';
+  const canCollapse = !isPrivateLesson && allSignups.length > ROSTER_PREVIEW_COUNT;
+  const visibleSignups = isPrivateLesson || showAll ? allSignups : allSignups.slice(0, ROSTER_PREVIEW_COUNT);
 
   const confirmDelete = () => {
     Alert.alert(
@@ -58,42 +65,45 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
 
   return (
     <Card>
-      <Pressable onPress={() => setExpanded((e) => !e)}>
-        <View style={styles.rowTop}>
-          <Text style={[styles.badge, { color: colors.accent }]}>{EVENT_TYPE_LABELS[event.type]}</Text>
-          {isCoach ? (
-            <Pressable onPress={confirmDelete}>
-              <Text style={{ color: colors.danger, fontSize: 13 }}>Cancel Event</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
-        <Text style={{ color: colors.textMuted, marginTop: 2 }}>{formatEventWhen(event.start_time, event.end_time)}</Text>
-        {event.location ? <Text style={{ color: colors.textMuted }}>{event.location}</Text> : null}
-      </Pressable>
+      <View style={styles.rowTop}>
+        <Text style={[styles.badge, { color: colors.accent }]}>{EVENT_TYPE_LABELS[event.type]}</Text>
+        {isCoach ? (
+          <Pressable onPress={confirmDelete}>
+            <Text style={{ color: colors.danger, fontSize: 13 }}>Cancel Event</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
+      <Text style={{ color: colors.textMuted, marginTop: 2 }}>{formatEventWhen(event.start_time, event.end_time)}</Text>
+      {event.location ? <Text style={{ color: colors.textMuted }}>{event.location}</Text> : null}
 
       {hasSignups ? (
         <View style={styles.signupSection}>
           <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: 6 }}>
-            {signups?.length ?? 0}
+            {allSignups.length}
             {event.capacity != null ? ` / ${event.capacity}` : ''} signed up
           </Text>
-          {expanded ? (
-            (signups ?? []).map((s) => {
-              const paid = s.private_lesson_payments?.paid ?? false;
-              return (
-                <View key={s.id} style={styles.athleteRow}>
-                  <Text style={{ color: colors.text }}>{s.athletes?.name ?? 'Athlete'}</Text>
-                  {isCoach && event.type === 'private_lesson' ? (
-                    <Pressable onPress={() => setPaid.mutate({ eventSignupId: s.id, paid: !paid })}>
-                      <Text style={{ color: paid ? colors.success : colors.danger, fontWeight: '600' }}>
-                        {paid ? 'Paid' : 'Unpaid'}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              );
-            })
+          {visibleSignups.map((s) => {
+            const paid = s.private_lesson_payments?.paid ?? false;
+            return (
+              <View key={s.id} style={styles.athleteRow}>
+                <Text style={{ color: colors.text }}>{s.athletes?.name ?? 'Athlete'}</Text>
+                {isCoach && event.type === 'private_lesson' ? (
+                  <Pressable onPress={() => setPaid.mutate({ eventSignupId: s.id, paid: !paid })}>
+                    <Text style={{ color: paid ? colors.success : colors.danger, fontWeight: '600' }}>
+                      {paid ? 'Paid' : 'Unpaid'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })}
+          {canCollapse ? (
+            <Pressable onPress={() => setShowAll((v) => !v)}>
+              <Text style={{ color: colors.primary, fontWeight: '600', marginTop: 6 }}>
+                {showAll ? 'Show less' : `Show all (${allSignups.length})`}
+              </Text>
+            </Pressable>
           ) : null}
           {!isCoach
             ? myAthletes.map((athlete) => {
