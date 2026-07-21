@@ -28,6 +28,7 @@ export default function JoinTeam() {
     const { error: rpcError } = await supabase.rpc('join_team', {
       p_code: code.trim(),
       p_full_name: fullName.trim() || null,
+      p_email: email.trim() || session?.user.email || null,
     });
     if (rpcError) {
       setError(rpcError.message);

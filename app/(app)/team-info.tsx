@@ -27,11 +27,13 @@ export default function TeamInfo() {
 
   const [fullName, setFullName] = useState(teamMember?.full_name ?? '');
   const [phone, setPhone] = useState(teamMember?.phone ?? '');
+  const [email, setEmail] = useState(teamMember?.email ?? '');
 
   useEffect(() => {
     setFullName(teamMember?.full_name ?? '');
     setPhone(teamMember?.phone ?? '');
-  }, [teamMember?.full_name, teamMember?.phone]);
+    setEmail(teamMember?.email ?? '');
+  }, [teamMember?.full_name, teamMember?.phone, teamMember?.email]);
 
   const myCoachProfile = (coaches ?? []).find((c) => c.user_id === session?.user.id);
   const otherContacts = (contacts ?? []).filter((c) => c.user_id !== teamMember?.user_id);
@@ -89,9 +91,16 @@ export default function TeamInfo() {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>My Contact Info</Text>
         <TextField label="Your Name" value={fullName} onChangeText={setFullName} />
         <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+        <TextField
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
         <Button
           title="Save"
-          onPress={() => updateContactInfo.mutate({ fullName, phone })}
+          onPress={() => updateContactInfo.mutate({ fullName, phone, email })}
           loading={updateContactInfo.isPending}
         />
       </Card>
@@ -106,6 +115,7 @@ export default function TeamInfo() {
             </Text>
           </View>
           {item.phone ? <Text style={{ color: colors.textMuted, marginTop: 4 }}>{item.phone}</Text> : null}
+          {item.email ? <Text style={{ color: colors.textMuted, marginTop: 2 }}>{item.email}</Text> : null}
         </Card>
       ))}
       {!contactsLoading && otherContacts.length === 0 ? (

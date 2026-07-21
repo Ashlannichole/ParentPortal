@@ -31,6 +31,7 @@ create table team_members (
   role team_role not null,
   full_name text,
   phone text,
+  email text,
   created_at timestamptz not null default now(),
   unique (team_id, user_id)
 );
@@ -97,6 +98,19 @@ create table event_signups (
   athlete_id uuid not null references athletes(id) on delete cascade,
   created_at timestamptz not null default now(),
   unique (event_id, athlete_id)
+);
+
+-- Coach-only private-lesson payment tracking. Deliberately its own table
+-- rather than a column on event_signups: RLS is row-level, so a `paid`
+-- column there (which parents can already read, for the roster) couldn't
+-- be hidden from them without hiding the whole row. A separate table with
+-- no parent-facing policy enforces "coach only" at the database level.
+create table private_lesson_payments (
+  id uuid primary key default gen_random_uuid(),
+  event_signup_id uuid not null references event_signups(id) on delete cascade unique,
+  paid boolean not null default false,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
 );
 
 create table swag_items (
@@ -181,7 +195,7 @@ $$;
 
 -- Creates a team and makes the calling user its first coach. Client calls
 -- this instead of inserting into teams/team_members directly.
-create or replace function create_team(p_name text, p_full_name text default null)
+create or replace function create_team(p_name text, p_full_name text default null, p_email text default null)
 returns teams
 language plpgsql
 security definer
@@ -210,8 +224,8 @@ begin
   values (p_name, v_coach_code, v_parent_code)
   returning * into v_team;
 
-  insert into team_members (team_id, user_id, role, full_name)
-  values (v_team.id, auth.uid(), 'coach', p_full_name);
+  insert into team_members (team_id, user_id, role, full_name, email)
+  values (v_team.id, auth.uid(), 'coach', p_full_name, p_email);
 
   return v_team;
 end;
@@ -220,7 +234,7 @@ $$;
 -- Joins a team using either its coach code or parent code. Role is inferred
 -- from which code matched, so a parent-facing invite link can never grant
 -- coach access.
-create or replace function join_team(p_code text, p_full_name text default null)
+create or replace function join_team(p_code text, p_full_name text default null, p_email text default null)
 returns teams
 language plpgsql
 security definer
@@ -239,8 +253,8 @@ begin
 
   v_role := case when v_team.coach_code = upper(p_code) then 'coach' else 'parent' end;
 
-  insert into team_members (team_id, user_id, role, full_name)
-  values (v_team.id, auth.uid(), v_role, p_full_name)
+  insert into team_members (team_id, user_id, role, full_name, email)
+  values (v_team.id, auth.uid(), v_role, p_full_name, p_email)
   on conflict (team_id, user_id) do update set role = excluded.role;
 
   return v_team;
@@ -250,20 +264,20 @@ $$;
 -- Lets a member update their own contact info (name/phone) without touching
 -- role or team_id -- a direct UPDATE policy on team_members would let a
 -- parent promote themselves to coach, so this is deliberately the only way.
-create or replace function update_my_contact_info(p_team_id uuid, p_full_name text, p_phone text)
+create or replace function update_my_contact_info(p_team_id uuid, p_full_name text, p_phone text, p_email text default null)
 returns void
 language sql
 security definer
 set search_path = public
 as $$
   update team_members
-  set full_name = p_full_name, phone = p_phone
+  set full_name = p_full_name, phone = p_phone, email = coalesce(p_email, email)
   where team_id = p_team_id and user_id = auth.uid();
 $$;
 
-grant execute on function create_team(text, text) to authenticated;
-grant execute on function join_team(text, text) to authenticated;
-grant execute on function update_my_contact_info(uuid, text, text) to authenticated;
+grant execute on function create_team(text, text, text) to authenticated;
+grant execute on function join_team(text, text, text) to authenticated;
+grant execute on function update_my_contact_info(uuid, text, text, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
@@ -280,6 +294,7 @@ alter table swag_votes enable row level security;
 alter table push_tokens enable row level security;
 alter table lesson_requests enable row level security;
 alter table payment_installments enable row level security;
+alter table private_lesson_payments enable row level security;
 
 -- teams: members can see their own team's row (name/codes). No direct
 -- insert/update policy -- team creation/joining goes through the RPCs above.
@@ -421,6 +436,36 @@ create policy "event_signups: parent or coach can delete" on event_signups
     or exists (
       select 1 from events e
       where e.id = event_signups.event_id and is_team_coach(e.team_id)
+    )
+  );
+
+-- private_lesson_payments: coach only, no parent policy at all -- a
+-- parent's query returns zero rows here regardless of what columns they ask
+-- for, enforced at the database level rather than just hidden in the UI.
+create policy "private_lesson_payments: coach can view" on private_lesson_payments
+  for select using (
+    exists (
+      select 1 from event_signups es
+      join events e on e.id = es.event_id
+      where es.id = private_lesson_payments.event_signup_id and is_team_coach(e.team_id)
+    )
+  );
+
+create policy "private_lesson_payments: coach can insert" on private_lesson_payments
+  for insert with check (
+    exists (
+      select 1 from event_signups es
+      join events e on e.id = es.event_id
+      where es.id = private_lesson_payments.event_signup_id and is_team_coach(e.team_id)
+    )
+  );
+
+create policy "private_lesson_payments: coach can update" on private_lesson_payments
+  for update using (
+    exists (
+      select 1 from event_signups es
+      join events e on e.id = es.event_id
+      where es.id = private_lesson_payments.event_signup_id and is_team_coach(e.team_id)
     )
   );
 

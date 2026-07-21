@@ -4,14 +4,16 @@ import { Redirect, Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useCalendarBadge } from '../../hooks/useCalendarBadge';
+import { useOnboardingStatus } from '../../hooks/useOnboardingStatus';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export default function AppLayout() {
   const { session, teamMember, loading } = useAuth();
+  const { needsOnboarding, loading: onboardingLoading } = useOnboardingStatus();
   const { colors } = useTheme();
   const { badgeCount } = useCalendarBadge();
 
-  if (loading) {
+  if (loading || (teamMember && onboardingLoading)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.primary} />
@@ -21,6 +23,7 @@ export default function AppLayout() {
 
   if (!session) return <Redirect href="/(auth)/welcome" />;
   if (!teamMember) return <Redirect href="/(auth)/join-team" />;
+  if (needsOnboarding) return <Redirect href="/(auth)/onboarding" />;
 
   return (
     <Tabs

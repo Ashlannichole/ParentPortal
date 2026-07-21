@@ -28,11 +28,12 @@ export function useUpdateMyContactInfo() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ fullName, phone }: { fullName: string; phone: string }) => {
+    mutationFn: async ({ fullName, phone, email }: { fullName: string; phone: string; email?: string }) => {
       const { error } = await supabase.rpc('update_my_contact_info', {
         p_team_id: teamId,
         p_full_name: fullName || null,
         p_phone: phone || null,
+        p_email: email || null,
       });
       if (error) throw error;
     },

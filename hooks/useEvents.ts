@@ -79,16 +79,19 @@ export function useEvents() {
 }
 
 export function useEventSignups(event: TeamEvent) {
-  const { teamMember } = useAuth();
+  const { teamMember, session } = useAuth();
   const teamId = teamMember?.team_id as string;
   const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ['event_signups', event.id],
     queryFn: async () => {
+      // private_lesson_payments has no parent-facing RLS policy at all, so
+      // this embed simply comes back empty for a parent's session -- no
+      // error, no special-casing needed here.
       const { data, error } = await supabase
         .from('event_signups')
-        .select('*, athletes(*)')
+        .select('*, athletes(*), private_lesson_payments(*)')
         .eq('event_id', event.id);
       if (error) throw error;
       return data as EventSignup[];
@@ -138,5 +141,16 @@ export function useEventSignups(event: TeamEvent) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['event_signups', event.id] }),
   });
 
-  return { ...query, signUp, cancelSignup };
+  const setPaid = useMutation({
+    mutationFn: async ({ eventSignupId, paid }: { eventSignupId: string; paid: boolean }) => {
+      const { error } = await supabase.from('private_lesson_payments').upsert(
+        { event_signup_id: eventSignupId, paid, updated_by: session!.user.id, updated_at: new Date().toISOString() },
+        { onConflict: 'event_signup_id' }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['event_signups', event.id] }),
+  });
+
+  return { ...query, signUp, cancelSignup, setPaid };
 }

@@ -37,7 +37,7 @@ function combineDateAndTime(date: Date | null, time: Date | null): Date | null {
 function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boolean; onDelete: () => void }) {
   const { colors } = useTheme();
   const { data: athletes } = useAthletes();
-  const { data: signups, signUp, cancelSignup } = useEventSignups(event);
+  const { data: signups, signUp, cancelSignup, setPaid } = useEventSignups(event);
   const [expanded, setExpanded] = useState(false);
 
   const hasSignups = SIGNUP_TYPES.includes(event.type);
@@ -78,12 +78,22 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
             {signups?.length ?? 0}
             {event.capacity != null ? ` / ${event.capacity}` : ''} signed up
           </Text>
-          {isCoach && expanded ? (
-            (signups ?? []).map((s) => (
-              <Text key={s.id} style={{ color: colors.text }}>
-                • {s.athletes?.name ?? 'Athlete'}
-              </Text>
-            ))
+          {expanded ? (
+            (signups ?? []).map((s) => {
+              const paid = s.private_lesson_payments?.[0]?.paid ?? false;
+              return (
+                <View key={s.id} style={styles.athleteRow}>
+                  <Text style={{ color: colors.text }}>{s.athletes?.name ?? 'Athlete'}</Text>
+                  {isCoach && event.type === 'private_lesson' ? (
+                    <Pressable onPress={() => setPaid.mutate({ eventSignupId: s.id, paid: !paid })}>
+                      <Text style={{ color: paid ? colors.success : colors.danger, fontWeight: '600' }}>
+                        {paid ? 'Paid' : 'Unpaid'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })
           ) : null}
           {!isCoach
             ? myAthletes.map((athlete) => {

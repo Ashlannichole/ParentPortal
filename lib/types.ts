@@ -15,6 +15,7 @@ export interface TeamMember {
   role: TeamRole;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
   created_at: string;
   teams: Team;
 }
@@ -97,6 +98,15 @@ export interface EventSignup {
   athlete_id: string;
   created_at: string;
   athletes?: Athlete;
+  private_lesson_payments?: PrivateLessonPayment[];
+}
+
+export interface PrivateLessonPayment {
+  id: string;
+  event_signup_id: string;
+  paid: boolean;
+  updated_by: string | null;
+  updated_at: string;
 }
 
 export interface SwagItem {

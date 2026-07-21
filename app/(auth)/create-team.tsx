@@ -47,6 +47,7 @@ export default function CreateTeam() {
     const { error: rpcError } = await supabase.rpc('create_team', {
       p_name: teamName.trim(),
       p_full_name: fullName.trim() || null,
+      p_email: email.trim() || null,
     });
     if (rpcError) {
       setLoading(false);

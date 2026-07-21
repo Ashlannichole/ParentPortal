@@ -1,13 +1,15 @@
 import React from 'react';
 import { Redirect, Stack } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
+import { useOnboardingStatus } from '../../hooks/useOnboardingStatus';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export default function AuthLayout() {
   const { session, teamMember, loading } = useAuth();
+  const { needsOnboarding, loading: onboardingLoading } = useOnboardingStatus();
   const { colors } = useTheme();
 
-  if (!loading && session && teamMember) {
+  if (!loading && session && teamMember && !onboardingLoading && !needsOnboarding) {
     return <Redirect href="/(app)" />;
   }
 
@@ -24,6 +26,7 @@ export default function AuthLayout() {
       <Stack.Screen name="sign-in" options={{ headerShown: true, title: 'Log In' }} />
       <Stack.Screen name="create-team" options={{ headerShown: true, title: 'Create a Team' }} />
       <Stack.Screen name="join-team" options={{ headerShown: true, title: 'Join a Team' }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: true, title: 'Welcome' }} />
     </Stack>
   );
 }
