@@ -80,7 +80,7 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
           </Text>
           {expanded ? (
             (signups ?? []).map((s) => {
-              const paid = s.private_lesson_payments?.[0]?.paid ?? false;
+              const paid = s.private_lesson_payments?.paid ?? false;
               return (
                 <View key={s.id} style={styles.athleteRow}>
                   <Text style={{ color: colors.text }}>{s.athletes?.name ?? 'Athlete'}</Text>

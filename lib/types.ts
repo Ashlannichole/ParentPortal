@@ -98,7 +98,7 @@ export interface EventSignup {
   athlete_id: string;
   created_at: string;
   athletes?: Athlete;
-  private_lesson_payments?: PrivateLessonPayment[];
+  private_lesson_payments?: PrivateLessonPayment | null;
 }
 
 export interface PrivateLessonPayment {
