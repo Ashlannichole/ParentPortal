@@ -11,16 +11,14 @@ interface ScreenProps {
 
 export function Screen({ children, scroll = false, style }: ScreenProps) {
   const { colors } = useTheme();
-  const Container = scroll ? ScrollView : View;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
-      <Container
-        style={scroll ? undefined : [styles.body, style]}
-        contentContainerStyle={scroll ? [styles.body, style] : undefined}
-      >
-        {children}
-      </Container>
+      {scroll ? (
+        <ScrollView contentContainerStyle={[styles.padding, style]}>{children}</ScrollView>
+      ) : (
+        <View style={[styles.body, style]}>{children}</View>
+      )}
     </SafeAreaView>
   );
 }
@@ -28,4 +26,5 @@ export function Screen({ children, scroll = false, style }: ScreenProps) {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   body: { flex: 1, padding: 20 },
+  padding: { padding: 20 },
 });

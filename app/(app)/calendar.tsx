@@ -44,13 +44,18 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
 
   const hasSignups = SIGNUP_TYPES.includes(event.type);
   const myAthletes = athletes ?? [];
+  const myAthleteIds = new Set(myAthletes.map((a) => a.id));
   const allSignups = signups ?? [];
   const signedUpAthleteIds = new Set(allSignups.map((s) => s.athlete_id));
   const isFull = event.capacity != null && allSignups.length >= event.capacity;
 
+  // Parents get their own athletes as a separate section (with the Sign Up /
+  // Cancel action) so the roster below never repeats a name they already see.
+  const otherSignups = isCoach ? allSignups : allSignups.filter((s) => !myAthleteIds.has(s.athlete_id));
+
   const isPrivateLesson = event.type === 'private_lesson';
-  const canCollapse = !isPrivateLesson && allSignups.length > ROSTER_PREVIEW_COUNT;
-  const visibleSignups = isPrivateLesson || showAll ? allSignups : allSignups.slice(0, ROSTER_PREVIEW_COUNT);
+  const canCollapse = !isPrivateLesson && otherSignups.length > ROSTER_PREVIEW_COUNT;
+  const visibleSignups = isPrivateLesson || showAll ? otherSignups : otherSignups.slice(0, ROSTER_PREVIEW_COUNT);
 
   const confirmDelete = () => {
     Alert.alert(
@@ -83,28 +88,6 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
             {allSignups.length}
             {event.capacity != null ? ` / ${event.capacity}` : ''} signed up
           </Text>
-          {visibleSignups.map((s) => {
-            const paid = s.private_lesson_payments?.paid ?? false;
-            return (
-              <View key={s.id} style={styles.athleteRow}>
-                <Text style={{ color: colors.text }}>{s.athletes?.name ?? 'Athlete'}</Text>
-                {isCoach && event.type === 'private_lesson' ? (
-                  <Pressable onPress={() => setPaid.mutate({ eventSignupId: s.id, paid: !paid })}>
-                    <Text style={{ color: paid ? colors.success : colors.danger, fontWeight: '600' }}>
-                      {paid ? 'Paid' : 'Unpaid'}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })}
-          {canCollapse ? (
-            <Pressable onPress={() => setShowAll((v) => !v)}>
-              <Text style={{ color: colors.primary, fontWeight: '600', marginTop: 6 }}>
-                {showAll ? 'Show less' : `Show all (${allSignups.length})`}
-              </Text>
-            </Pressable>
-          ) : null}
           {!isCoach
             ? myAthletes.map((athlete) => {
                 const signedUp = signedUpAthleteIds.has(athlete.id);
@@ -130,6 +113,28 @@ function EventRow({ event, isCoach, onDelete }: { event: TeamEvent; isCoach: boo
                 );
               })
             : null}
+          {visibleSignups.map((s) => {
+            const paid = s.private_lesson_payments?.paid ?? false;
+            return (
+              <View key={s.id} style={styles.athleteRow}>
+                <Text style={{ color: colors.text }}>{s.athletes?.name ?? 'Athlete'}</Text>
+                {isCoach && event.type === 'private_lesson' ? (
+                  <Pressable onPress={() => setPaid.mutate({ eventSignupId: s.id, paid: !paid })}>
+                    <Text style={{ color: paid ? colors.success : colors.danger, fontWeight: '600' }}>
+                      {paid ? 'Paid' : 'Unpaid'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })}
+          {canCollapse ? (
+            <Pressable onPress={() => setShowAll((v) => !v)}>
+              <Text style={{ color: colors.primary, fontWeight: '600', marginTop: 6 }}>
+                {showAll ? 'Show less' : `Show all (${otherSignups.length})`}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </Card>
