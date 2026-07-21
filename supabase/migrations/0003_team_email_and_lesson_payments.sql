@@ -3,7 +3,7 @@
 -- the Supabase SQL editor alongside the schema/migrations you've already
 -- applied.
 
-alter table team_members add column email text;
+alter table team_members add column if not exists email text;
 
 -- Re-create create_team/join_team/update_my_contact_info with an added
 -- p_email parameter. Drop first since adding a parameter changes the
