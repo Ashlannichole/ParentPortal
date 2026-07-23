@@ -5,6 +5,7 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../hooks/useAuth';
+import { useAthletes } from '../../hooks/useAthletes';
 import { useCoaches } from '../../hooks/useCoaches';
 import { useContacts, useUpdateMyContactInfo } from '../../hooks/useContacts';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -17,6 +18,7 @@ export default function TeamInfo() {
 
   const { data: coaches, isLoading: coachesLoading, upsertCoach } = useCoaches();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
+  const { data: athletes } = useAthletes();
   const updateContactInfo = useUpdateMyContactInfo();
 
   const [bioModalVisible, setBioModalVisible] = useState(false);
@@ -37,6 +39,11 @@ export default function TeamInfo() {
 
   const myCoachProfile = (coaches ?? []).find((c) => c.user_id === session?.user.id);
   const otherContacts = (contacts ?? []).filter((c) => c.user_id !== teamMember?.user_id);
+
+  const daughterNamesByParent = (athletes ?? []).reduce<Record<string, string[]>>((acc, athlete) => {
+    (acc[athlete.parent_user_id] ??= []).push(athlete.name);
+    return acc;
+  }, {});
 
   const openBioEditor = () => {
     setEditingCoach(myCoachProfile ?? null);
@@ -116,6 +123,11 @@ export default function TeamInfo() {
           </View>
           {item.phone ? <Text style={{ color: colors.textMuted, marginTop: 4 }}>{item.phone}</Text> : null}
           {item.email ? <Text style={{ color: colors.textMuted, marginTop: 2 }}>{item.email}</Text> : null}
+          {daughterNamesByParent[item.user_id]?.length ? (
+            <Text style={{ color: colors.textMuted, marginTop: 2 }}>
+              Parent of {daughterNamesByParent[item.user_id].join(', ')}
+            </Text>
+          ) : null}
         </Card>
       ))}
       {!contactsLoading && otherContacts.length === 0 ? (

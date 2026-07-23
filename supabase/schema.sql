@@ -306,9 +306,10 @@ create policy "teams: members can view" on teams
 create policy "team_members: members can view roster" on team_members
   for select using (is_team_member(team_id));
 
--- athletes: coaches see the whole roster; parents see their own daughters.
+-- athletes: any team member can see the whole roster (used to show whose
+-- daughter is whose in the Team Info directory).
 create policy "athletes: view" on athletes
-  for select using (is_team_coach(team_id) or parent_user_id = auth.uid());
+  for select using (is_team_member(team_id));
 
 create policy "athletes: parent can add own" on athletes
   for insert with check (parent_user_id = auth.uid() and is_team_member(team_id));
@@ -549,10 +550,14 @@ create policy "lesson_requests: coach can delete" on lesson_requests
   for delete using (is_team_coach(team_id));
 
 -- ---------------------------------------------------------------------------
--- Realtime (for live SWAG vote counts)
+-- Realtime (for live SWAG vote counts and live calendar/roster updates)
 -- ---------------------------------------------------------------------------
 alter publication supabase_realtime add table swag_votes;
 alter publication supabase_realtime add table swag_items;
+alter publication supabase_realtime add table events;
+alter publication supabase_realtime add table event_signups;
+alter publication supabase_realtime add table private_lesson_payments;
+alter publication supabase_realtime add table lesson_requests;
 
 -- ---------------------------------------------------------------------------
 -- Backfill (no-op on a fresh install with no existing payments)

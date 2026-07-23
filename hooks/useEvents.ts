@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
@@ -25,6 +26,24 @@ export function useEvents() {
     },
     enabled: !!teamId,
   });
+
+  useEffect(() => {
+    if (!teamId) return;
+    const channel = supabase
+      .channel(`events-${teamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events', filter: `team_id=eq.${teamId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['events', teamId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [teamId, queryClient]);
 
   const addEvent = useMutation({
     mutationFn: async (input: {
@@ -98,6 +117,27 @@ export function useEventSignups(event: TeamEvent) {
     },
     enabled: !!event.id,
   });
+
+  useEffect(() => {
+    if (!event.id) return;
+    const channel = supabase
+      .channel(`event-signups-${event.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_signups', filter: `event_id=eq.${event.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['event_signups', event.id] });
+        }
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'private_lesson_payments' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['event_signups', event.id] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [event.id, queryClient]);
 
   const signUp = useMutation({
     mutationFn: async (athlete: { id: string; name: string }) => {
