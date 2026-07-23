@@ -40,3 +40,17 @@ end $$;
 drop policy if exists "athletes: view" on athletes;
 create policy "athletes: view" on athletes
   for select using (is_team_member(team_id));
+
+-- (3) By default Postgres only includes primary-key columns in the "old row"
+-- image for UPDATE/DELETE. Realtime needs the full old row (specifically
+-- team_id) to authorize whether a client is allowed to see that change under
+-- RLS -- without this, cancel/decline/delete events are silently dropped
+-- instead of reaching other clients (confirmed live: inserts synced fine,
+-- deletes didn't, until this was added). Idempotent -- setting the same
+-- replica identity twice is a no-op, not an error.
+alter table events replica identity full;
+alter table event_signups replica identity full;
+alter table private_lesson_payments replica identity full;
+alter table lesson_requests replica identity full;
+alter table swag_votes replica identity full;
+alter table swag_items replica identity full;

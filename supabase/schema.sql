@@ -559,6 +559,16 @@ alter publication supabase_realtime add table event_signups;
 alter publication supabase_realtime add table private_lesson_payments;
 alter publication supabase_realtime add table lesson_requests;
 
+-- Full replica identity so UPDATE/DELETE broadcasts carry the whole old row
+-- (specifically team_id) -- Realtime needs this to authorize the change
+-- under RLS, otherwise cancel/decline/delete events are silently dropped.
+alter table events replica identity full;
+alter table event_signups replica identity full;
+alter table private_lesson_payments replica identity full;
+alter table lesson_requests replica identity full;
+alter table swag_votes replica identity full;
+alter table swag_items replica identity full;
+
 -- ---------------------------------------------------------------------------
 -- Backfill (no-op on a fresh install with no existing payments)
 -- ---------------------------------------------------------------------------

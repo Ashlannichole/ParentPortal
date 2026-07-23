@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
@@ -12,6 +12,7 @@ export function useEvents() {
   const teamId = teamMember?.team_id;
   const isCoach = teamMember?.role === 'coach';
   const queryClient = useQueryClient();
+  const instanceId = useId();
 
   const query = useQuery({
     queryKey: ['events', teamId],
@@ -29,8 +30,11 @@ export function useEvents() {
 
   useEffect(() => {
     if (!teamId) return;
+    // Topic includes a per-instance id -- useEvents() is mounted in several
+    // places at once (tab badge, calendar, home), and Supabase's realtime
+    // client throws if two channels share the same topic string.
     const channel = supabase
-      .channel(`events-${teamId}`)
+      .channel(`events-${teamId}-${instanceId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events', filter: `team_id=eq.${teamId}` },
@@ -43,7 +47,7 @@ export function useEvents() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [teamId, queryClient]);
+  }, [teamId, instanceId, queryClient]);
 
   const addEvent = useMutation({
     mutationFn: async (input: {
@@ -101,6 +105,7 @@ export function useEventSignups(event: TeamEvent) {
   const { teamMember, session } = useAuth();
   const teamId = teamMember?.team_id as string;
   const queryClient = useQueryClient();
+  const instanceId = useId();
 
   const query = useQuery({
     queryKey: ['event_signups', event.id],
@@ -121,7 +126,7 @@ export function useEventSignups(event: TeamEvent) {
   useEffect(() => {
     if (!event.id) return;
     const channel = supabase
-      .channel(`event-signups-${event.id}`)
+      .channel(`event-signups-${event.id}-${instanceId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'event_signups', filter: `event_id=eq.${event.id}` },
@@ -137,7 +142,7 @@ export function useEventSignups(event: TeamEvent) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [event.id, queryClient]);
+  }, [event.id, instanceId, queryClient]);
 
   const signUp = useMutation({
     mutationFn: async (athlete: { id: string; name: string }) => {

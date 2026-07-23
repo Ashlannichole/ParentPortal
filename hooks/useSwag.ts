@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
@@ -8,6 +8,7 @@ export function useSwagItems() {
   const { teamMember } = useAuth();
   const teamId = teamMember?.team_id;
   const queryClient = useQueryClient();
+  const instanceId = useId();
 
   const query = useQuery({
     queryKey: ['swag_items', teamId],
@@ -25,8 +26,12 @@ export function useSwagItems() {
 
   useEffect(() => {
     if (!teamId) return;
+    // Topic includes a per-instance id -- both the Home tab and the SWAG tab
+    // call this hook, and React Navigation keeps blurred tabs mounted, so
+    // two instances can be alive at once. Supabase's realtime client throws
+    // if two channels share the same topic string.
     const channel = supabase
-      .channel(`swag-${teamId}`)
+      .channel(`swag-${teamId}-${instanceId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'swag_votes' }, () => {
         queryClient.invalidateQueries({ queryKey: ['swag_votes'] });
       })
@@ -42,7 +47,7 @@ export function useSwagItems() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [teamId, queryClient]);
+  }, [teamId, instanceId, queryClient]);
 
   const addItem = useMutation({
     mutationFn: async (input: { name: string; image_url?: string | null }) => {

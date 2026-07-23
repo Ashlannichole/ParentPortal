@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
@@ -12,6 +12,7 @@ export function useLessonRequests() {
   const teamId = teamMember?.team_id;
   const isCoach = teamMember?.role === 'coach';
   const queryClient = useQueryClient();
+  const instanceId = useId();
 
   const query = useQuery({
     queryKey: ['lesson_requests', teamId],
@@ -30,7 +31,7 @@ export function useLessonRequests() {
   useEffect(() => {
     if (!teamId) return;
     const channel = supabase
-      .channel(`lesson-requests-${teamId}`)
+      .channel(`lesson-requests-${teamId}-${instanceId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'lesson_requests', filter: `team_id=eq.${teamId}` },
@@ -43,7 +44,7 @@ export function useLessonRequests() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [teamId, queryClient]);
+  }, [teamId, instanceId, queryClient]);
 
   const pending = (query.data ?? []).filter((r) => r.status === 'pending');
 
