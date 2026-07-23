@@ -12,6 +12,7 @@ export default function AppLayout() {
   const { needsOnboarding, loading: onboardingLoading } = useOnboardingStatus();
   const { colors } = useTheme();
   const { badgeCount } = useCalendarBadge();
+  const isCoach = teamMember?.role === 'coach';
 
   if (loading || (teamMember && onboardingLoading)) {
     return (
@@ -59,7 +60,16 @@ export default function AppLayout() {
         name="payments"
         options={{
           title: 'Payments',
+          href: isCoach ? undefined : null,
           tabBarIcon: ({ color, size }) => <Ionicons name="cash" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="announcements"
+        options={{
+          title: 'Announcements',
+          href: isCoach ? null : undefined,
+          tabBarIcon: ({ color, size }) => <Ionicons name="megaphone" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

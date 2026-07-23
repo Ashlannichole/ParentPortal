@@ -127,6 +127,15 @@ export interface SwagVote {
   created_at: string;
 }
 
+export interface Announcement {
+  id: string;
+  team_id: string;
+  title: string;
+  body: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface Contact {
   user_id: string;
   role: TeamRole;

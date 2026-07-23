@@ -130,6 +130,15 @@ create table swag_votes (
   unique (item_id, user_id)
 );
 
+create table announcements (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  title text not null,
+  body text not null,
+  created_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
 create table push_tokens (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -291,6 +300,7 @@ alter table events enable row level security;
 alter table event_signups enable row level security;
 alter table swag_items enable row level security;
 alter table swag_votes enable row level security;
+alter table announcements enable row level security;
 alter table push_tokens enable row level security;
 alter table lesson_requests enable row level security;
 alter table payment_installments enable row level security;
@@ -509,6 +519,19 @@ create policy "swag_votes: member can change own vote" on swag_votes
 create policy "swag_votes: member can retract own vote" on swag_votes
   for delete using (user_id = auth.uid());
 
+-- announcements: viewable by any team member, editable only by coaches.
+create policy "announcements: members can view" on announcements
+  for select using (is_team_member(team_id));
+
+create policy "announcements: coach can insert" on announcements
+  for insert with check (is_team_coach(team_id));
+
+create policy "announcements: coach can update" on announcements
+  for update using (is_team_coach(team_id));
+
+create policy "announcements: coach can delete" on announcements
+  for delete using (is_team_coach(team_id));
+
 -- push_tokens: strictly private to the owning user.
 create policy "push_tokens: own read" on push_tokens
   for select using (user_id = auth.uid());
@@ -558,6 +581,7 @@ alter publication supabase_realtime add table events;
 alter publication supabase_realtime add table event_signups;
 alter publication supabase_realtime add table private_lesson_payments;
 alter publication supabase_realtime add table lesson_requests;
+alter publication supabase_realtime add table announcements;
 
 -- Full replica identity so UPDATE/DELETE broadcasts carry the whole old row
 -- (specifically team_id) -- Realtime needs this to authorize the change
@@ -568,6 +592,7 @@ alter table private_lesson_payments replica identity full;
 alter table lesson_requests replica identity full;
 alter table swag_votes replica identity full;
 alter table swag_items replica identity full;
+alter table announcements replica identity full;
 
 -- ---------------------------------------------------------------------------
 -- Backfill (no-op on a fresh install with no existing payments)

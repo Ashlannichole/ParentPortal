@@ -5,13 +5,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
+import { AthletePaymentCard, groupPaymentsByAthlete } from '../../components/PaymentSummary';
 import { useAuth } from '../../hooks/useAuth';
-import { useEvents } from '../../hooks/useEvents';
+import { useEvents, useMySignedUpEventIds } from '../../hooks/useEvents';
 import { useSwagItems, useSwagVotes } from '../../hooks/useSwag';
 import { useLessonRequests } from '../../hooks/useLessonRequests';
+import { usePayments } from '../../hooks/usePayments';
 import { useTheme } from '../../theme/ThemeProvider';
-import { EVENT_TYPE_LABELS } from '../../lib/types';
+import { EVENT_TYPE_LABELS, EventType } from '../../lib/types';
 import { formatEventWhen } from '../../lib/format';
+
+// Events a parent only sees on Upcoming if their own athlete is signed up --
+// everything else (practice, scrimmage, tournament) is whole-team, so it
+// always shows.
+const SIGNUP_ONLY_TYPES: EventType[] = ['open_gym', 'private_lesson'];
 
 export default function Dashboard() {
   const { colors } = useTheme();
@@ -21,13 +28,21 @@ export default function Dashboard() {
   const { data: events } = useEvents();
   const { data: swagItems } = useSwagItems();
   const { pending } = useLessonRequests();
+  const { data: mySignedUpEventIds } = useMySignedUpEventIds();
+  const { data: payments } = usePayments();
 
   const upcoming = useMemo(() => {
     const now = Date.now();
     return (events ?? [])
       .filter((e) => new Date(e.start_time).getTime() >= now)
+      .filter((e) => {
+        if (isCoach || !SIGNUP_ONLY_TYPES.includes(e.type)) return true;
+        return mySignedUpEventIds?.has(e.id) ?? false;
+      })
       .slice(0, 5);
-  }, [events]);
+  }, [events, isCoach, mySignedUpEventIds]);
+
+  const myPaymentGroups = useMemo(() => groupPaymentsByAthlete(payments), [payments]);
 
   const latestSwagItem = swagItems && swagItems.length > 0 ? swagItems[swagItems.length - 1] : null;
   const { data: swagVotes, castVote, retractVote } = useSwagVotes(latestSwagItem?.id ?? '');
@@ -65,6 +80,16 @@ export default function Dashboard() {
         </Card>
       ) : null}
 
+      {isCoach ? (
+        <Card>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Announcements</Text>
+          <Text style={{ color: colors.textMuted, marginBottom: 10 }}>
+            Post updates for the whole team -- parents see these on their Announcements tab.
+          </Text>
+          <Button title="Manage Announcements" variant="secondary" onPress={() => router.push('/announcements')} />
+        </Card>
+      ) : null}
+
       <Card>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Upcoming</Text>
         {upcoming.length === 0 ? (
@@ -81,6 +106,21 @@ export default function Dashboard() {
           ))
         )}
       </Card>
+
+      {!isCoach ? (
+        <View style={styles.section}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Payments</Text>
+          {myPaymentGroups.length === 0 ? (
+            <Card>
+              <Text style={{ color: colors.textMuted }}>No payments tracked yet.</Text>
+            </Card>
+          ) : (
+            myPaymentGroups.map((group) => (
+              <AthletePaymentCard key={group.athleteId} group={group} isCoach={false} />
+            ))
+          )}
+        </View>
+      ) : null}
 
       <Card>
         <Text style={[styles.cardTitle, { color: colors.text }]}>SWAG</Text>
@@ -118,6 +158,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700', marginBottom: 4 },
   subtitle: { fontSize: 15, marginBottom: 20 },
   cardTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
+  section: { marginBottom: 12 },
   codeLabel: { fontSize: 12, marginTop: 8 },
   code: { fontSize: 22, fontWeight: '700', letterSpacing: 2 },
   row: { flexDirection: 'row', alignItems: 'center' },
