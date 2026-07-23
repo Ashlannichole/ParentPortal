@@ -1,7 +1,8 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
+import { useAthletes } from './useAthletes';
 import { notifyRole, notifyTeam, notifyUsers } from '../lib/notifications';
 import type { EventSignup, EventType, TeamEvent } from '../lib/types';
 
@@ -198,4 +199,33 @@ export function useEventSignups(event: TeamEvent) {
   });
 
   return { ...query, signUp, cancelSignup, setPaid };
+}
+
+// Which event ids the current parent's own athlete(s) are signed up for --
+// used to filter open_gym/private_lesson events out of a parent's Upcoming
+// list when their daughter isn't attending. Not meaningful for a coach, who
+// should keep seeing every event.
+export function useMySignedUpEventIds() {
+  const { teamMember, session } = useAuth();
+  const { data: athletes } = useAthletes();
+  const teamId = teamMember?.team_id;
+  const userId = session?.user.id;
+
+  const myAthleteIds = useMemo(
+    () => (athletes ?? []).filter((a) => a.parent_user_id === userId).map((a) => a.id),
+    [athletes, userId]
+  );
+
+  return useQuery({
+    queryKey: ['my_event_signups', teamId, myAthleteIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('event_signups')
+        .select('event_id')
+        .in('athlete_id', myAthleteIds);
+      if (error) throw error;
+      return new Set((data ?? []).map((row) => row.event_id as string));
+    },
+    enabled: !!teamId && myAthleteIds.length > 0,
+  });
 }
