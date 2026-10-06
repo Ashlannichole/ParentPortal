@@ -8,7 +8,8 @@
     "userInterfaceStyle": "automatic",
     "scheme": "volleyballparentportal",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ashlancunningham.stats"
     },
     "android": {
       "adaptiveIcon": {
