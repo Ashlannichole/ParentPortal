@@ -9,9 +9,10 @@
     "scheme": "volleyballparentportal",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ashlancunningham.stats"
+      "bundleIdentifier": "com.ashlancunningham.parentportal"
     },
     "android": {
+      "package": "com.ashlancunningham.parentportal",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
